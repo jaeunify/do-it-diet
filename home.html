@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마운자로 구간별 가속도 예측기</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #6c5ce7; --accent: #fd79a8; --bg: #f9f9fb; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; color: #2d3436; }
+        .card { width: 100%; max-width: 900px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .input-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #f1f2f6; padding: 15px; border-radius: 12px; margin-top: 10px; }
+        input, select { padding: 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 0.9em; }
+        button { padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .dose-badge { padding: 2px 8px; border-radius: 15px; font-size: 0.75em; color: white; font-weight: bold; }
+        .prediction-info { background: #edf2ff; padding: 15px; border-radius: 12px; border-left: 5px solid var(--primary); margin: 15px 0; font-size: 0.95em; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 15px; }
+        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
+        .quad-info { font-size: 0.8em; color: #636e72; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>💉 마운자로 구간별 가속도 예측기 (V4)</h2>
+    <div id="status-display" class="prediction-info">데이터를 입력하면 현재 용량 구간의 가속도를 계산합니다.</div>
+    <canvas id="mainChart" height="120"></canvas>
+</div>
+
+<div class="card">
+    <h3>➕ 데이터 입력 (인바디 및 투약)</h3>
+    <div class="input-section">
+        <input type="date" id="in-date">
+        <input type="number" id="in-weight" step="0.1" placeholder="체중(kg)">
+        <select id="in-dose">
+            <option value="2.5">2.5mg</option>
+            <option value="5.0" selected>5.0mg</option>
+            <option value="7.5">7.5mg</option>
+            <option value="10.0">10.0mg</option>
+            <option value="12.5">12.5mg</option>
+            <option value="15.0">15.0mg</option>
+        </select>
+        <button onclick="addData()">기록 추가</button>
+    </div>
+    
+    <div style="overflow-x:auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>날짜</th>
+                    <th>용량</th>
+                    <th>체중</th>
+                    <th>상태</th>
+                    <th>삭제</th>
+                </tr>
+            </thead>
+            <tbody id="data-list"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    // 초기 통합 데이터 (이미지 기반 히스토리)
+    let history = [];
+
+    let chart;
+
+    function addData() {
+        const date = document.getElementById('in-date').value;
+        const weight = parseFloat(document.getElementById('in-weight').value);
+        const dose = parseFloat(document.getElementById('in-dose').value);
+        if(!date || isNaN(weight)) return alert("정보를 정확히 입력하세요!");
+        history.push({ date, weight, dose });
+        history.sort((a, b) => new Date(a.date) - new Date(b.date));
+        updateAll();
+    }
+
+    function removeData(index) {
+        history.splice(index, 1);
+        updateAll();
+    }
+
+    function updateAll() {
+        renderTable();
+        renderChart();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('data-list');
+        tbody.innerHTML = '';
+        history.forEach((item, i) => {
+            const color = item.dose >= 5 ? '#9966FF' : '#4BC0C0';
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.date}</td>
+                    <td><span class="dose-badge" style="background:${color}">${item.dose}mg</span></td>
+                    <td style="font-weight:bold">${item.weight}kg</td>
+                    <td class="quad-info">${getPhaseLabel(i)}</td>
+                    <td><button onclick="removeData(${i})" style="background:#fab1a0; color:#d63031; padding:2px 8px;">X</button></td>
+                </tr>
+            `;
+        });
+    }
+
+    function getPhaseLabel(index) {
+        if(index === 0) return "Start";
+        return history[index].dose !== history[index-1].dose ? "Dose Change" : "-";
+    }
+
+    function renderChart() {
+        const groups = [];
+        let currentGroup = [];
+        
+        // 용량별로 그룹 나누기 (이차함수 분리 적용)
+        history.forEach((item, i) => {
+            if(i > 0 && item.dose !== history[i-1].dose) {
+                groups.push(currentGroup);
+                currentGroup = [];
+            }
+            currentGroup.push(item);
+        });
+        groups.push(currentGroup);
+
+        const lastGroup = groups[groups.length - 1];
+        let prediction = null;
+        
+        // 마지막 그룹(현재 용량)에 대해 이차함수 예측 수행
+        if(lastGroup.length >= 3) {
+            prediction = calculateNextWeight(lastGroup);
+        }
+
+        const labels = history.map(d => d.date.slice(5));
+        const weights = history.map(d => d.weight);
+        
+        let finalLabels = [...labels];
+        let finalWeights = [...weights];
+
+        if(prediction) {
+            finalLabels.push("7일 뒤(예상)");
+            finalWeights.push(prediction.weight);
+            document.getElementById('status-display').innerHTML = 
+                `현재 <b>${lastGroup[0].dose}mg</b> 구간 가속도 분석 결과: <br>7일 뒤 예상 체중은 <b style="color:var(--accent)">${prediction.weight}kg</b> 입니다. (감량 가속도: ${prediction.accel.toFixed(3)})`;
+        } else {
+            document.getElementById('status-display').innerHTML = "예측을 위해 현재 용량 구간의 데이터를 3개 이상 입력해 주세요.";
+        }
+
+        if(chart) chart.destroy();
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: finalLabels,
+                datasets: [{
+                    label: '실제 체중',
+                    data: finalWeights,
+                    borderColor: '#6c5ce7',
+                    borderWidth: 3,
+                    pointBackgroundColor: finalWeights.map((_, i) => i >= weights.length ? '#fd79a8' : '#6c5ce7'),
+                    pointRadius: 5,
+                    tension: 0.3,
+                    fill: false
+                }]
+            },
+            options: { responsive: true, scales: { y: { min: 45 } } }
+        });
+    }
+
+    // 이차함수 모델 기반 예측 함수 (y = at^2 + bt + c)
+    function calculateNextWeight(group) {
+        const firstDate = new Date(group[0].date);
+        const X = group.map(d => (new Date(d.date) - firstDate) / (1000*60*60*24));
+        const Y = group.map(d => d.weight);
+        const n = X.length;
+
+        // 단순화된 가속도 추출 모델 (최근 3점의 변화율의 변화율)
+        const lastIdx = n - 1;
+        const dt1 = X[lastIdx] - X[lastIdx - 1];
+        const dt2 = X[lastIdx - 1] - X[lastIdx - 2];
+        
+        const v1 = (Y[lastIdx] - Y[lastIdx - 1]) / dt1; // 최근 속도
+        const v2 = (Y[lastIdx - 1] - Y[lastIdx - 2]) / dt2; // 직전 속도
+        
+        const accel = (v1 - v2) / ((dt1 + dt2) / 2); // 가속도 (감량 가속)
+        
+        const predictDays = 7;
+        // 예측식: 현재무게 + (현재속도 * 시간) + (0.5 * 가속도 * 시간^2)
+        let predWeight = Y[lastIdx] + (v1 * predictDays) + (0.5 * accel * Math.pow(predictDays, 2));
+        
+        // 물리적 한계치 보정 (주당 2.5kg 이상 급격한 변화는 제한)
+        const maxLoss = -2.5;
+        if(predWeight < Y[lastIdx] + maxLoss) predWeight = Y[lastIdx] + maxLoss;
+
+        return { weight: predWeight.toFixed(1), accel: accel };
+    }
+
+    window.onload = updateAll;
+</script>
+
+</body>
+</html>

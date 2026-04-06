@@ -133,6 +133,15 @@
         }
         .add-btn.fat-btn { background: var(--fat); }
         .add-btn.icon-btn { padding: 9px 12px; font-size: 1em; flex: 0 0 auto; min-width: unset; }
+        .date-wrap { position: relative; flex: 1 1 120px; min-width: 0; }
+        .date-wrap::before {
+            content: '날짜 입력';
+            position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+            font-size: 0.85em; color: #aaa; pointer-events: none;
+        }
+        .date-wrap input[type=date]::-webkit-calendar-picker-indicator { opacity: 0.5; }
+        .date-wrap input[type=date] { width: 100%; }
+        .btn-group { display: flex; gap: 8px; flex: 0 0 auto; }
 
         /* Table */
         table { width: 100%; border-collapse: collapse; font-size: 0.83em; margin-top: 16px; }
@@ -241,19 +250,21 @@
 
     <div id="input-panel-inbody" class="input-panel active">
         <div class="input-row">
-            <input type="date" id="ib-date">
+            <div class="date-wrap"><input type="date" id="ib-date"></div>
             <input type="number" id="ib-weight" step="0.1" placeholder="체중 (kg)">
             <input type="number" id="ib-fat" step="0.1" placeholder="체지방 (kg)">
             <input type="number" id="ib-muscle" step="0.1" placeholder="골격근량 (kg)">
-            <button class="add-btn icon-btn" onclick="addInbody()" style="background:#00b894;">➕</button>
-            <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
-            <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
+            <div class="btn-group">
+                <button class="add-btn icon-btn" onclick="addInbody()" style="background:#00b894;">➕</button>
+                <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
+                <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
+            </div>
         </div>
     </div>
 
     <div id="input-panel-dose" class="input-panel">
         <div class="input-row">
-            <input type="date" id="dose-date">
+            <div class="date-wrap"><input type="date" id="dose-date"></div>
             <select id="dose-val">
                 <option value="2.5">2.5mg</option>
                 <option value="5.0" selected>5.0mg</option>
@@ -262,9 +273,11 @@
                 <option value="12.5">12.5mg</option>
                 <option value="15.0">15.0mg</option>
             </select>
-            <button class="add-btn icon-btn" onclick="addDose()" style="background:#00b894;">➕</button>
-            <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
-            <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
+            <div class="btn-group">
+                <button class="add-btn icon-btn" onclick="addDose()" style="background:#00b894;">➕</button>
+                <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
+                <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
+            </div>
         </div>
     </div>
 

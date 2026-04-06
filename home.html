@@ -5,52 +5,222 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>마운자로 구간별 가속도 예측기</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="localdata.js"></script>
     <style>
-        :root { --primary: #6c5ce7; --accent: #fd79a8; --bg: #f9f9fb; }
-        body { font-family: 'Pretendard', sans-serif; background: var(--bg); display: flex; flex-direction: column; align-items: center; padding: 20px; color: #2d3436; }
-        .card { width: 100%; max-width: 900px; background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .input-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; background: #f1f2f6; padding: 15px; border-radius: 12px; margin-top: 10px; }
-        input, select { padding: 10px; border: 1px solid #dfe6e9; border-radius: 8px; font-size: 0.9em; }
-        button { padding: 10px; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        :root {
+            --primary: #6c5ce7;
+            --accent: #fd79a8;
+            --fat: #e17055;
+            --muscle: #00b894;
+            --bg: #f9f9fb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #2d3436;
+        }
+        .card {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            padding: 25px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+        h2, h3 { margin: 0 0 16px; }
+
+        /* Tab bar */
+        .tab-bar {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 16px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 0;
+        }
+        .tab-btn {
+            padding: 8px 18px;
+            border: none;
+            background: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.88em;
+            color: #b2bec3;
+            position: relative;
+            bottom: -2px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.15s;
+        }
+        .tab-btn:hover { color: #636e72; }
+        .tab-btn.active { color: var(--primary); border-bottom: 2px solid var(--primary); background: none; }
+        .tab-btn.fat-tab.active { color: var(--fat); border-bottom-color: var(--fat); }
+        .tab-btn.muscle-tab.active { color: var(--muscle); border-bottom-color: var(--muscle); }
+
+        /* Prediction control */
+        .predict-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+        }
+        .predict-control label { font-size: 0.88em; font-weight: bold; color: #636e72; }
+        .predict-control input[type=number] {
+            width: 72px;
+            padding: 7px 10px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+        .calc-btn {
+            padding: 7px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.88em;
+        }
+
+        /* Prediction info boxes */
+        .prediction-info {
+            padding: 12px 16px;
+            border-radius: 10px;
+            border-left: 5px solid var(--primary);
+            margin-bottom: 14px;
+            font-size: 0.92em;
+            background: #edf2ff;
+            line-height: 1.7;
+        }
+        .prediction-info.fat { background: #fff3f0; border-left-color: var(--fat); }
+        .prediction-info.muscle { background: #effffa; border-left-color: var(--muscle); }
+
+        /* Input sections */
+        .input-panel { display: none; }
+        .input-panel.active { display: block; }
+        .input-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            background: #f1f2f6;
+            padding: 14px;
+            border-radius: 12px;
+        }
+        input[type=date], input[type=number], select {
+            padding: 9px 10px;
+            border: 1px solid #dfe6e9;
+            border-radius: 8px;
+            font-size: 0.88em;
+            width: 100%;
+        }
+        .add-btn {
+            padding: 9px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.88em;
+        }
+        .add-btn.fat-btn { background: var(--fat); }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 0.83em; margin-top: 16px; }
+        th { padding: 10px 8px; background: #f8f9fa; font-size: 0.82em; color: #636e72; text-transform: uppercase; letter-spacing: 0.03em; }
+        td { padding: 9px 8px; border-bottom: 1px solid #f1f2f6; text-align: center; }
         .dose-badge { padding: 2px 8px; border-radius: 15px; font-size: 0.75em; color: white; font-weight: bold; }
-        .prediction-info { background: #edf2ff; padding: 15px; border-radius: 12px; border-left: 5px solid var(--primary); margin: 15px 0; font-size: 0.95em; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.85em; margin-top: 15px; }
-        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: center; }
-        .quad-info { font-size: 0.8em; color: #636e72; font-style: italic; }
+        .del-btn { background: #ffeaa7; color: #e17055; border: none; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-weight: bold; }
+
+        /* Chart panel */
+        .chart-panel { display: none; }
+        .chart-panel.active { display: block; }
     </style>
 </head>
 <body>
 
+<!-- ── 차트 카드 ── -->
 <div class="card">
-    <h2>💉 마운자로 구간별 가속도 예측기 (V4)</h2>
-    <div id="status-display" class="prediction-info">데이터를 입력하면 현재 용량 구간의 가속도를 계산합니다.</div>
-    <canvas id="mainChart" height="120"></canvas>
+    <h2>💉 마운자로 구간별 가속도 예측기 (V5)</h2>
+
+    <div class="predict-control">
+        <label>예측 기간</label>
+        <input type="number" id="predict-days" value="7" min="1" max="180">
+        <span style="font-size:0.88em; color:#636e72;">일 뒤</span>
+        <button class="calc-btn" onclick="updateAll()">계산</button>
+    </div>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchChartTab('weight', this)">체중</button>
+        <button class="tab-btn fat-tab" onclick="switchChartTab('fat', this)">체지방량</button>
+        <button class="tab-btn muscle-tab" onclick="switchChartTab('muscle', this)">골격근량</button>
+    </div>
+
+    <div id="chart-panel-weight" class="chart-panel active">
+        <div id="status-weight" class="prediction-info">데이터를 불러오는 중...</div>
+        <canvas id="chart-weight" height="130"></canvas>
+    </div>
+    <div id="chart-panel-fat" class="chart-panel">
+        <div id="status-fat" class="prediction-info fat">데이터를 불러오는 중...</div>
+        <canvas id="chart-fat" height="130"></canvas>
+    </div>
+    <div id="chart-panel-muscle" class="chart-panel">
+        <div id="status-muscle" class="prediction-info muscle">데이터를 불러오는 중...</div>
+        <canvas id="chart-muscle" height="130"></canvas>
+    </div>
 </div>
 
+<!-- ── 입력 카드 ── -->
 <div class="card">
-    <h3>➕ 데이터 입력 (인바디 및 투약)</h3>
-    <div class="input-section">
-        <input type="date" id="in-date">
-        <input type="number" id="in-weight" step="0.1" placeholder="체중(kg)">
-        <select id="in-dose">
-            <option value="2.5">2.5mg</option>
-            <option value="5.0" selected>5.0mg</option>
-            <option value="7.5">7.5mg</option>
-            <option value="10.0">10.0mg</option>
-            <option value="12.5">12.5mg</option>
-            <option value="15.0">15.0mg</option>
-        </select>
-        <button onclick="addData()">기록 추가</button>
+    <h3>➕ 데이터 입력</h3>
+
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchInputTab('inbody', this)">인바디 입력</button>
+        <button class="tab-btn fat-tab" onclick="switchInputTab('dose', this)">투약 입력</button>
     </div>
-    
+
+    <div id="input-panel-inbody" class="input-panel active">
+        <div class="input-row">
+            <input type="date" id="ib-date">
+            <input type="number" id="ib-weight" step="0.1" placeholder="체중 (kg)">
+            <input type="number" id="ib-fat" step="0.1" placeholder="체지방 (kg)">
+            <input type="number" id="ib-muscle" step="0.1" placeholder="골격근량 (kg)">
+            <button class="add-btn" onclick="addInbody()">기록 추가</button>
+        </div>
+    </div>
+
+    <div id="input-panel-dose" class="input-panel">
+        <div class="input-row">
+            <input type="date" id="dose-date">
+            <select id="dose-val">
+                <option value="2.5">2.5mg</option>
+                <option value="5.0" selected>5.0mg</option>
+                <option value="7.5">7.5mg</option>
+                <option value="10.0">10.0mg</option>
+                <option value="12.5">12.5mg</option>
+                <option value="15.0">15.0mg</option>
+            </select>
+            <button class="add-btn fat-btn" onclick="addDose()">투약 추가</button>
+        </div>
+    </div>
+
+    <!-- 통합 테이블 -->
     <div style="overflow-x:auto;">
         <table>
             <thead>
                 <tr>
                     <th>날짜</th>
-                    <th>용량</th>
+                    <th>투약</th>
                     <th>체중</th>
-                    <th>상태</th>
+                    <th style="color:var(--fat)">체지방</th>
+                    <th style="color:var(--muscle)">골격근량</th>
                     <th>삭제</th>
                 </tr>
             </thead>
@@ -60,137 +230,204 @@
 </div>
 
 <script>
-    // 초기 통합 데이터 (이미지 기반 히스토리)
-    let history = [];
+    const loaded = (typeof localData !== 'undefined') ? localData : { inbody: [], dose: [] };
+    let inbodyData = loaded.inbody.map(r => ({ ...r }));
+    let doseData   = loaded.dose.map(r => ({ ...r }));
 
-    let chart;
+    let charts = { weight: null, fat: null, muscle: null };
 
-    function addData() {
-        const date = document.getElementById('in-date').value;
-        const weight = parseFloat(document.getElementById('in-weight').value);
-        const dose = parseFloat(document.getElementById('in-dose').value);
-        if(!date || isNaN(weight)) return alert("정보를 정확히 입력하세요!");
-        history.push({ date, weight, dose });
-        history.sort((a, b) => new Date(a.date) - new Date(b.date));
+    // ── 탭 전환 ──
+    function switchChartTab(type, btn) {
+        document.querySelectorAll('#chart-panel-weight, #chart-panel-fat, #chart-panel-muscle')
+            .forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-bar').item(0).querySelectorAll('.tab-btn')
+            .forEach(b => b.classList.remove('active'));
+        document.getElementById('chart-panel-' + type).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    function switchInputTab(type, btn) {
+        document.querySelectorAll('#input-panel-inbody, #input-panel-dose')
+            .forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab-bar').item(1).querySelectorAll('.tab-btn')
+            .forEach(b => b.classList.remove('active'));
+        document.getElementById('input-panel-' + type).classList.add('active');
+        btn.classList.add('active');
+    }
+
+    // ── 데이터 추가 ──
+    function addInbody() {
+        const date   = document.getElementById('ib-date').value;
+        const weight = parseFloat(document.getElementById('ib-weight').value);
+        const fat    = parseFloat(document.getElementById('ib-fat').value);
+        const muscle = parseFloat(document.getElementById('ib-muscle').value);
+        if (!date || isNaN(weight)) return alert('날짜와 체중은 필수입니다!');
+        const existing = inbodyData.find(r => r.date === date);
+        if (existing) {
+            existing.weight = weight;
+            if (!isNaN(fat))    existing.fat = fat;
+            if (!isNaN(muscle)) existing.muscle = muscle;
+        } else {
+            inbodyData.push({ date, weight, fat: isNaN(fat) ? null : fat, muscle: isNaN(muscle) ? null : muscle });
+            inbodyData.sort((a, b) => a.date.localeCompare(b.date));
+        }
         updateAll();
     }
 
-    function removeData(index) {
-        history.splice(index, 1);
+    function addDose() {
+        const date = document.getElementById('dose-date').value;
+        const dose = parseFloat(document.getElementById('dose-val').value);
+        if (!date) return alert('날짜를 입력하세요!');
+        const existing = doseData.find(r => r.date === date);
+        if (existing) existing.dose = dose;
+        else {
+            doseData.push({ date, dose });
+            doseData.sort((a, b) => a.date.localeCompare(b.date));
+        }
         updateAll();
     }
 
-    function updateAll() {
-        renderTable();
-        renderChart();
+    function removeRow(date) {
+        inbodyData = inbodyData.filter(r => r.date !== date);
+        doseData   = doseData.filter(r => r.date !== date);
+        updateAll();
     }
 
+    // ── 활성 용량 조회 ──
+    function getActiveDose(date) {
+        const prior = doseData.filter(r => r.date <= date);
+        return prior.length ? prior[prior.length - 1].dose : null;
+    }
+
+    // ── 테이블 렌더 ──
     function renderTable() {
+        // 날짜 union
+        const dates = [...new Set([
+            ...inbodyData.map(r => r.date),
+            ...doseData.map(r => r.date)
+        ])].sort();
+
         const tbody = document.getElementById('data-list');
         tbody.innerHTML = '';
-        history.forEach((item, i) => {
-            const color = item.dose >= 5 ? '#9966FF' : '#4BC0C0';
+        dates.forEach(date => {
+            const ib   = inbodyData.find(r => r.date === date);
+            const dose = getActiveDose(date);
+            const doseChanged = doseData.some(r => r.date === date);
+            const color = dose >= 5 ? '#9966FF' : dose ? '#4BC0C0' : '#b2bec3';
             tbody.innerHTML += `
                 <tr>
-                    <td>${item.date}</td>
-                    <td><span class="dose-badge" style="background:${color}">${item.dose}mg</span></td>
-                    <td style="font-weight:bold">${item.weight}kg</td>
-                    <td class="quad-info">${getPhaseLabel(i)}</td>
-                    <td><button onclick="removeData(${i})" style="background:#fab1a0; color:#d63031; padding:2px 8px;">X</button></td>
-                </tr>
-            `;
+                    <td>${date}</td>
+                    <td>${dose != null
+                        ? `<span class="dose-badge" style="background:${color}">${dose}mg${doseChanged ? ' ★' : ''}</span>`
+                        : '-'}</td>
+                    <td style="font-weight:bold">${ib ? ib.weight + 'kg' : '-'}</td>
+                    <td style="color:var(--fat)">${ib?.fat != null ? ib.fat + 'kg' : '-'}</td>
+                    <td style="color:var(--muscle)">${ib?.muscle != null ? ib.muscle + 'kg' : '-'}</td>
+                    <td><button class="del-btn" onclick="removeRow('${date}')">X</button></td>
+                </tr>`;
         });
     }
 
-    function getPhaseLabel(index) {
-        if(index === 0) return "Start";
-        return history[index].dose !== history[index-1].dose ? "Dose Change" : "-";
+    // ── 예측 로직 ──
+    function calcPrediction(group, field, predictDays) {
+        const vals = group.map(r => ({ t: r.t, v: r[field] })).filter(r => r.v != null);
+        if (vals.length < 3) return null;
+        const n = vals.length;
+        const dt1 = vals[n-1].t - vals[n-2].t;
+        const dt2 = vals[n-2].t - vals[n-3].t;
+        const v1 = (vals[n-1].v - vals[n-2].v) / dt1;
+        const v2 = (vals[n-2].v - vals[n-3].v) / dt2;
+        const accel = (v1 - v2) / ((dt1 + dt2) / 2);
+        let pred = vals[n-1].v + v1 * predictDays + 0.5 * accel * Math.pow(predictDays, 2);
+        if (field === 'weight' && pred < vals[n-1].v - 2.5 * predictDays / 7)
+            pred = vals[n-1].v - 2.5 * predictDays / 7;
+        return { pred: parseFloat(pred.toFixed(1)), accel };
     }
 
-    function renderChart() {
+    function buildGroups() {
+        // inbodyData에 dose 붙여서 그룹화
+        const rows = inbodyData.map((r, i) => ({
+            ...r,
+            dose: getActiveDose(r.date),
+            t: (new Date(r.date) - new Date(inbodyData[0].date)) / 86400000
+        }));
         const groups = [];
-        let currentGroup = [];
-        
-        // 용량별로 그룹 나누기 (이차함수 분리 적용)
-        history.forEach((item, i) => {
-            if(i > 0 && item.dose !== history[i-1].dose) {
-                groups.push(currentGroup);
-                currentGroup = [];
-            }
-            currentGroup.push(item);
+        let cur = [];
+        rows.forEach((r, i) => {
+            if (i > 0 && r.dose !== rows[i-1].dose) { groups.push(cur); cur = []; }
+            cur.push(r);
         });
-        groups.push(currentGroup);
+        groups.push(cur);
+        return groups;
+    }
 
+    // ── 차트 렌더 ──
+    function renderSingleChart(field, canvasId, statusId, color, label, unit, statusClass) {
+        const predictDays = parseInt(document.getElementById('predict-days').value) || 7;
+        if (inbodyData.length === 0) return;
+
+        const groups = buildGroups();
         const lastGroup = groups[groups.length - 1];
-        let prediction = null;
-        
-        // 마지막 그룹(현재 용량)에 대해 이차함수 예측 수행
-        if(lastGroup.length >= 3) {
-            prediction = calculateNextWeight(lastGroup);
-        }
+        const result = calcPrediction(lastGroup, field, predictDays);
 
-        const labels = history.map(d => d.date.slice(5));
-        const weights = history.map(d => d.weight);
-        
+        const labels  = inbodyData.map(r => r.date.slice(5));
+        const values  = inbodyData.map(r => r[field] ?? null);
+        const n = values.length;
+
         let finalLabels = [...labels];
-        let finalWeights = [...weights];
+        let finalValues = [...values];
 
-        if(prediction) {
-            finalLabels.push("7일 뒤(예상)");
-            finalWeights.push(prediction.weight);
-            document.getElementById('status-display').innerHTML = 
-                `현재 <b>${lastGroup[0].dose}mg</b> 구간 가속도 분석 결과: <br>7일 뒤 예상 체중은 <b style="color:var(--accent)">${prediction.weight}kg</b> 입니다. (감량 가속도: ${prediction.accel.toFixed(3)})`;
+        const dose = getActiveDose(inbodyData[inbodyData.length - 1]?.date);
+
+        if (result) {
+            finalLabels.push(`${predictDays}일 뒤(예상)`);
+            finalValues.push(result.pred);
+            document.getElementById(statusId).innerHTML =
+                `현재 <b>${dose != null ? dose + 'mg' : '-'}</b> 구간 · ${predictDays}일 뒤 예상 ${label}: ` +
+                `<b style="color:${color}">${result.pred}${unit}</b>` +
+                `<br><small style="color:#888">가속도: ${result.accel.toFixed(4)}</small>`;
         } else {
-            document.getElementById('status-display').innerHTML = "예측을 위해 현재 용량 구간의 데이터를 3개 이상 입력해 주세요.";
+            document.getElementById(statusId).innerHTML = '현재 용량 구간 데이터 3개 이상 필요합니다.';
         }
 
-        if(chart) chart.destroy();
-        const ctx = document.getElementById('mainChart').getContext('2d');
-        chart = new Chart(ctx, {
+        const pointColors = finalValues.map((_, i) => i >= n ? '#fd79a8' : color);
+
+        if (charts[field]) charts[field].destroy();
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        charts[field] = new Chart(ctx, {
             type: 'line',
             data: {
                 labels: finalLabels,
                 datasets: [{
-                    label: '실제 체중',
-                    data: finalWeights,
-                    borderColor: '#6c5ce7',
+                    label,
+                    data: finalValues,
+                    borderColor: color,
+                    backgroundColor: color + '18',
                     borderWidth: 3,
-                    pointBackgroundColor: finalWeights.map((_, i) => i >= weights.length ? '#fd79a8' : '#6c5ce7'),
+                    pointBackgroundColor: pointColors,
                     pointRadius: 5,
                     tension: 0.3,
-                    fill: false
+                    fill: true,
+                    spanGaps: true
                 }]
             },
-            options: { responsive: true, scales: { y: { min: 45 } } }
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        ticks: { callback: v => v + unit }
+                    }
+                }
+            }
         });
     }
 
-    // 이차함수 모델 기반 예측 함수 (y = at^2 + bt + c)
-    function calculateNextWeight(group) {
-        const firstDate = new Date(group[0].date);
-        const X = group.map(d => (new Date(d.date) - firstDate) / (1000*60*60*24));
-        const Y = group.map(d => d.weight);
-        const n = X.length;
-
-        // 단순화된 가속도 추출 모델 (최근 3점의 변화율의 변화율)
-        const lastIdx = n - 1;
-        const dt1 = X[lastIdx] - X[lastIdx - 1];
-        const dt2 = X[lastIdx - 1] - X[lastIdx - 2];
-        
-        const v1 = (Y[lastIdx] - Y[lastIdx - 1]) / dt1; // 최근 속도
-        const v2 = (Y[lastIdx - 1] - Y[lastIdx - 2]) / dt2; // 직전 속도
-        
-        const accel = (v1 - v2) / ((dt1 + dt2) / 2); // 가속도 (감량 가속)
-        
-        const predictDays = 7;
-        // 예측식: 현재무게 + (현재속도 * 시간) + (0.5 * 가속도 * 시간^2)
-        let predWeight = Y[lastIdx] + (v1 * predictDays) + (0.5 * accel * Math.pow(predictDays, 2));
-        
-        // 물리적 한계치 보정 (주당 2.5kg 이상 급격한 변화는 제한)
-        const maxLoss = -2.5;
-        if(predWeight < Y[lastIdx] + maxLoss) predWeight = Y[lastIdx] + maxLoss;
-
-        return { weight: predWeight.toFixed(1), accel: accel };
+    function updateAll() {
+        renderTable();
+        renderSingleChart('weight', 'chart-weight', 'status-weight', '#6c5ce7', '체중', 'kg');
+        renderSingleChart('fat',    'chart-fat',    'status-fat',    '#e17055', '체지방량', 'kg');
+        renderSingleChart('muscle', 'chart-muscle', 'status-muscle', '#00b894', '골격근량', 'kg');
     }
 
     window.onload = updateAll;

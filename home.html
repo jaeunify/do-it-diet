@@ -154,6 +154,9 @@
         <label>예측 기간</label>
         <input type="number" id="predict-days" value="7" min="1" max="180">
         <span style="font-size:0.88em; color:#636e72;">일 뒤</span>
+        <span style="color:#dfe6e9; margin: 0 4px;">|</span>
+        <label>목표 체중</label>
+        <input type="number" id="goal-weight" step="0.1" placeholder="kg">
         <button class="calc-btn" onclick="updateAll()">계산</button>
     </div>
 
@@ -420,7 +423,8 @@
         const coeffs = polyRegression(vals.map(r => (r.t - tMin) / tRange), vals.map(r => r.v), 1);
         if (!coeffs) return null;
         return {
-            evalAt: rawT => evalPoly(coeffs, (rawT - tMin) / tRange),
+            evalAt:  rawT => evalPoly(coeffs, (rawT - tMin) / tRange),
+            solveFor: y => coeffs[1] === 0 ? null : tMin + tRange * (y - coeffs[0]) / coeffs[1],
             startT: vals[0].t,
             endT:   vals[vals.length - 1].t
         };
@@ -482,10 +486,44 @@
             };
         }).filter(Boolean);
 
+        // 목표 체중 라인 + D-day (체중 차트만)
+        const goalWeight = field === 'weight' ? parseFloat(document.getElementById('goal-weight').value) : NaN;
+        let goalDataset = null;
+        let goalMsg = '';
+        if (!isNaN(goalWeight) && goalWeight > 0) {
+            const lastFit = fitGroup(lastGroup, field);
+            const xMin = 0;
+            const xMax = points[points.length - 1].x + predictDays;
+            goalDataset = {
+                label: '목표',
+                data: [{ x: xMin, y: goalWeight }, { x: xMax, y: goalWeight }],
+                borderColor: '#00cec9',
+                borderWidth: 1.5,
+                borderDash: [4, 3],
+                pointRadius: 0,
+                fill: false,
+                tension: 0,
+                order: 0
+            };
+            if (lastFit) {
+                const goalRawT = lastFit.solveFor(goalWeight);
+                const lastRawT = lastGroup[lastGroup.length - 1].t;
+                if (goalRawT !== null && goalRawT > lastRawT) {
+                    const daysLeft = Math.ceil(goalRawT - lastRawT);
+                    const goalDate = new Date(baseDate.getTime() + goalRawT * 86400000);
+                    const fmt = `${goalDate.getFullYear()}.${String(goalDate.getMonth()+1).padStart(2,'0')}.${String(goalDate.getDate()).padStart(2,'0')}`;
+                    goalMsg = ` &nbsp;|&nbsp; 목표 <b style="color:#00cec9">${goalWeight}kg</b>까지 약 <b>${daysLeft}일</b> (${fmt} 예상)`;
+                } else if (goalRawT !== null) {
+                    goalMsg = ` &nbsp;|&nbsp; 목표 <b style="color:#00cec9">${goalWeight}kg</b> 이미 달성!`;
+                }
+            }
+        }
+
         if (result) {
             document.getElementById(statusId).innerHTML =
                 `현재 <b>${dose != null ? dose + 'mg' : '-'}</b> 구간 · ${predictDays}일 뒤 예상 ${label}: ` +
                 `<b style="color:${color}">${result.pred}${unit}</b>` +
+                goalMsg +
                 `<br><small style="color:#888">${result.degree}차 회귀 (데이터 ${lastGroup.filter(r => r[field] != null).length}개)</small>`;
         } else {
             document.getElementById(statusId).innerHTML = '현재 용량 구간 데이터 2개 이상 필요합니다.';
@@ -510,7 +548,8 @@
                         spanGaps: true,
                         order: 1
                     },
-                    ...regressionDatasets
+                    ...regressionDatasets,
+                    ...(goalDataset ? [goalDataset] : [])
                 ]
             },
             options: {
@@ -571,6 +610,20 @@
     Chart.register(doseLinesPlugin);
 
     function updateAll() {
+        // 목표 체중이 있으면 예측 기간을 자동 계산해서 먼저 설정
+        const goalWeight = parseFloat(document.getElementById('goal-weight').value);
+        if (!isNaN(goalWeight) && goalWeight > 0 && inbodyData.length >= 2) {
+            const groups = buildGroups();
+            const lastGroup = groups[groups.length - 1];
+            const lastFit = fitGroup(lastGroup, 'weight');
+            if (lastFit) {
+                const goalRawT = lastFit.solveFor(goalWeight);
+                const lastRawT = lastGroup[lastGroup.length - 1].t;
+                if (goalRawT !== null && goalRawT > lastRawT) {
+                    document.getElementById('predict-days').value = Math.ceil(goalRawT - lastRawT);
+                }
+            }
+        }
         renderTable();
         renderSingleChart('weight', 'chart-weight', 'status-weight', '#6c5ce7', '체중', 'kg');
         renderSingleChart('fat',    'chart-fat',    'status-fat',    '#e17055', '체지방량', 'kg');

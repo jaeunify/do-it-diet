@@ -328,20 +328,67 @@
         });
     }
 
-    // ── 예측 로직 ──
+    // ── 예측 로직 (4차 다항회귀) ──
     function calcPrediction(group, field, predictDays) {
         const vals = group.map(r => ({ t: r.t, v: r[field] })).filter(r => r.v != null);
-        if (vals.length < 3) return null;
-        const n = vals.length;
-        const dt1 = vals[n-1].t - vals[n-2].t;
-        const dt2 = vals[n-2].t - vals[n-3].t;
-        const v1 = (vals[n-1].v - vals[n-2].v) / dt1;
-        const v2 = (vals[n-2].v - vals[n-3].v) / dt2;
-        const accel = (v1 - v2) / ((dt1 + dt2) / 2);
-        let pred = vals[n-1].v + v1 * predictDays + 0.5 * accel * Math.pow(predictDays, 2);
-        if (field === 'weight' && pred < vals[n-1].v - 2.5 * predictDays / 7)
-            pred = vals[n-1].v - 2.5 * predictDays / 7;
-        return { pred: parseFloat(pred.toFixed(1)), accel };
+        if (vals.length < 2) return null; // 1차는 최소 2개
+
+        const degree = 1;
+
+        // 수치 안정성을 위해 t 정규화 [0, 1]
+        const tMin = vals[0].t;
+        const tMax = vals[vals.length - 1].t;
+        const tRange = tMax - tMin || 1;
+        const tNorm  = vals.map(r => (r.t - tMin) / tRange);
+        const tPred  = (vals[vals.length - 1].t + predictDays - tMin) / tRange;
+        const Y      = vals.map(r => r.v);
+
+        const coeffs = polyRegression(tNorm, Y, degree);
+        if (!coeffs) return null;
+
+        let pred = evalPoly(coeffs, tPred);
+        if (field === 'weight' && pred < vals[vals.length - 1].v - 2.5 * predictDays / 7)
+            pred = vals[vals.length - 1].v - 2.5 * predictDays / 7;
+
+        return { pred: parseFloat(pred.toFixed(1)), degree };
+    }
+
+    // 최소제곱법 다항회귀
+    function polyRegression(X, Y, degree) {
+        const d = degree + 1;
+        const A = Array.from({ length: d }, () => new Array(d).fill(0));
+        const b = new Array(d).fill(0);
+        for (let i = 0; i < d; i++) {
+            for (let j = 0; j < d; j++)
+                for (let k = 0; k < X.length; k++)
+                    A[i][j] += Math.pow(X[k], i + j);
+            for (let k = 0; k < X.length; k++)
+                b[i] += Y[k] * Math.pow(X[k], i);
+        }
+        return gaussianElim(A, b);
+    }
+
+    // 가우스 소거법
+    function gaussianElim(A, b) {
+        const n = b.length;
+        const M = A.map((row, i) => [...row, b[i]]);
+        for (let col = 0; col < n; col++) {
+            let maxRow = col;
+            for (let row = col + 1; row < n; row++)
+                if (Math.abs(M[row][col]) > Math.abs(M[maxRow][col])) maxRow = row;
+            [M[col], M[maxRow]] = [M[maxRow], M[col]];
+            if (Math.abs(M[col][col]) < 1e-12) return null;
+            for (let row = 0; row < n; row++) {
+                if (row === col) continue;
+                const f = M[row][col] / M[col][col];
+                for (let k = col; k <= n; k++) M[row][k] -= f * M[col][k];
+            }
+        }
+        return M.map((row, i) => row[n] / row[i]);
+    }
+
+    function evalPoly(coeffs, t) {
+        return coeffs.reduce((sum, c, i) => sum + c * Math.pow(t, i), 0);
     }
 
     function buildGroups() {
@@ -370,37 +417,42 @@
         const lastGroup = groups[groups.length - 1];
         const result = calcPrediction(lastGroup, field, predictDays);
 
-        const labels  = inbodyData.map(r => r.date.slice(5));
-        const values  = inbodyData.map(r => r[field] ?? null);
-        const n = values.length;
+        const baseDate = new Date(inbodyData[0].date);
+        const toDay = date => (new Date(date) - baseDate) / 86400000;
+        const fmtDay = d => {
+            const dt = new Date(baseDate.getTime() + d * 86400000);
+            return `${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
+        };
 
-        let finalLabels = [...labels];
-        let finalValues = [...values];
+        const n = inbodyData.length;
+        const points = inbodyData.map(r => ({
+            x: toDay(r.date),
+            y: r[field] ?? null
+        }));
 
         const dose = getActiveDose(inbodyData[inbodyData.length - 1]?.date);
 
         if (result) {
-            finalLabels.push(`${predictDays}일 뒤(예상)`);
-            finalValues.push(result.pred);
+            const lastDay = toDay(inbodyData[inbodyData.length - 1].date);
+            points.push({ x: lastDay + predictDays, y: result.pred });
             document.getElementById(statusId).innerHTML =
                 `현재 <b>${dose != null ? dose + 'mg' : '-'}</b> 구간 · ${predictDays}일 뒤 예상 ${label}: ` +
                 `<b style="color:${color}">${result.pred}${unit}</b>` +
-                `<br><small style="color:#888">가속도: ${result.accel.toFixed(4)}</small>`;
+                `<br><small style="color:#888">${result.degree}차 다항회귀 (데이터 ${lastGroup.filter(r => r[field] != null).length}개)</small>`;
         } else {
-            document.getElementById(statusId).innerHTML = '현재 용량 구간 데이터 3개 이상 필요합니다.';
+            document.getElementById(statusId).innerHTML = '현재 용량 구간 데이터 2개 이상 필요합니다.';
         }
 
-        const pointColors = finalValues.map((_, i) => i >= n ? '#fd79a8' : color);
+        const pointColors = points.map((_, i) => i >= n ? '#fd79a8' : color);
 
         if (charts[field]) charts[field].destroy();
         const ctx = document.getElementById(canvasId).getContext('2d');
         charts[field] = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: finalLabels,
                 datasets: [{
                     label,
-                    data: finalValues,
+                    data: points,
                     borderColor: color,
                     backgroundColor: color + '18',
                     borderWidth: 3,
@@ -415,6 +467,10 @@
                 responsive: true,
                 plugins: { legend: { display: false } },
                 scales: {
+                    x: {
+                        type: 'linear',
+                        ticks: { callback: d => fmtDay(d) }
+                    },
                     y: {
                         ticks: { callback: v => v + unit }
                     }

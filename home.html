@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>마운자로 구간별 가속도 예측기</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="localdata.js"></script>
     <style>
         :root {
             --primary: #6c5ce7;
@@ -196,6 +195,8 @@
             <input type="number" id="ib-fat" step="0.1" placeholder="체지방 (kg)">
             <input type="number" id="ib-muscle" step="0.1" placeholder="골격근량 (kg)">
             <button class="add-btn" onclick="addInbody()">기록 추가</button>
+            <button class="add-btn" onclick="copyData()" style="background:#636e72" title="클립보드에 복사">📋</button>
+            <button class="add-btn" onclick="pasteData()" style="background:#636e72" title="클립보드에서 붙여넣기">📥</button>
         </div>
     </div>
 
@@ -211,6 +212,8 @@
                 <option value="15.0">15.0mg</option>
             </select>
             <button class="add-btn fat-btn" onclick="addDose()">투약 추가</button>
+            <button class="add-btn" onclick="copyData()" style="background:#636e72" title="클립보드에 복사">📋</button>
+            <button class="add-btn" onclick="pasteData()" style="background:#636e72" title="클립보드에서 붙여넣기">📥</button>
         </div>
     </div>
 
@@ -233,7 +236,19 @@
 </div>
 
 <script>
-    const loaded = (typeof localData !== 'undefined') ? localData : { inbody: [], dose: [] };
+    function loadFromStorage() {
+        try {
+            const raw = localStorage.getItem('dietData');
+            if (raw) return JSON.parse(raw);
+        } catch {}
+        return { inbody: [], dose: [] };
+    }
+
+    function saveToStorage() {
+        localStorage.setItem('dietData', JSON.stringify({ inbody: inbodyData, dose: doseData }));
+    }
+
+    const loaded = loadFromStorage();
     let inbodyData = loaded.inbody.map(r => ({ ...r }));
     let doseData   = loaded.dose.map(r => ({ ...r }));
 
@@ -288,6 +303,33 @@
             doseData.sort((a, b) => a.date.localeCompare(b.date));
         }
         updateAll();
+    }
+
+    function copyData() {
+        const json = JSON.stringify({ inbody: inbodyData, dose: doseData }, null, 2);
+        navigator.clipboard.writeText(json).then(() => alert('📋 복사 완료!'));
+    }
+
+    async function pasteData() {
+        try {
+            const text = await navigator.clipboard.readText();
+            const parsed = JSON.parse(text);
+            if (!parsed.inbody && !parsed.dose) return alert('올바른 형식이 아닙니다.');
+            // 날짜 기준 머지 (기존 데이터 유지, 새 데이터 추가)
+            (parsed.inbody || []).forEach(r => {
+                const idx = inbodyData.findIndex(e => e.date === r.date);
+                if (idx >= 0) inbodyData[idx] = r; else inbodyData.push(r);
+            });
+            (parsed.dose || []).forEach(r => {
+                const idx = doseData.findIndex(e => e.date === r.date);
+                if (idx >= 0) doseData[idx] = r; else doseData.push(r);
+            });
+            inbodyData.sort((a, b) => a.date.localeCompare(b.date));
+            doseData.sort((a, b) => a.date.localeCompare(b.date));
+            updateAll();
+        } catch {
+            alert('붙여넣기 실패. 클립보드 데이터를 확인하세요.');
+        }
     }
 
     function removeRow(date) {
@@ -609,7 +651,8 @@
     };
     Chart.register(doseLinesPlugin);
 
-    function updateAll() {
+    function updateAll(skipSave) {
+        if (!skipSave) saveToStorage();
         // 목표 체중이 있으면 예측 기간을 자동 계산해서 먼저 설정
         const goalWeight = parseFloat(document.getElementById('goal-weight').value);
         if (!isNaN(goalWeight) && goalWeight > 0 && inbodyData.length >= 2) {
@@ -630,7 +673,7 @@
         renderSingleChart('muscle', 'chart-muscle', 'status-muscle', '#00b894', '골격근량', 'kg');
     }
 
-    window.onload = updateAll;
+    window.onload = () => updateAll(true);
 </script>
 
 </body>

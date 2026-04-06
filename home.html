@@ -105,13 +105,15 @@
         .input-panel { display: none; }
         .input-panel.active { display: block; }
         .input-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
             background: #f1f2f6;
             padding: 14px;
             border-radius: 12px;
         }
+        .input-row input, .input-row select { flex: 1 1 120px; min-width: 0; }
         input[type=date], input[type=number], select {
             padding: 9px 10px;
             border: 1px solid #dfe6e9;
@@ -130,6 +132,7 @@
             font-size: 0.88em;
         }
         .add-btn.fat-btn { background: var(--fat); }
+        .add-btn.icon-btn { padding: 9px 12px; font-size: 1em; flex: 0 0 auto; min-width: unset; }
 
         /* Table */
         table { width: 100%; border-collapse: collapse; font-size: 0.83em; margin-top: 16px; }
@@ -141,9 +144,57 @@
         /* Chart panel */
         .chart-panel { display: none; }
         .chart-panel.active { display: block; }
+
+        /* Toast */
+        #toast {
+            position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+            background: #2d3436; color: white; padding: 10px 20px;
+            border-radius: 10px; font-size: 0.88em; opacity: 0;
+            transition: opacity 0.3s; pointer-events: none; z-index: 9999;
+            white-space: nowrap;
+        }
+        #toast.show { opacity: 1; }
+
+        /* Modal */
+        #modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.35); z-index: 9998;
+            align-items: center; justify-content: center;
+        }
+        #modal-overlay.show { display: flex; }
+        #modal-box {
+            background: white; border-radius: 16px; padding: 24px 28px;
+            max-width: 520px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+        }
+        #modal-box h4 { margin: 0 0 12px; color: #e17055; }
+        #modal-box pre {
+            background: #f1f2f6; border-radius: 8px; padding: 12px;
+            font-size: 0.78em; overflow-x: auto; white-space: pre-wrap;
+            word-break: break-all; margin: 8px 0;
+        }
+        #modal-box .modal-close {
+            margin-top: 16px; padding: 8px 20px;
+            background: var(--primary); color: white;
+            border: none; border-radius: 8px; cursor: pointer;
+            font-weight: bold; float: right;
+        }
     </style>
 </head>
 <body>
+
+<div id="toast"></div>
+
+<div id="modal-overlay">
+    <div id="modal-box">
+        <h4>⚠️ 형식이 이상한데요?</h4>
+        <p style="font-size:0.88em; color:#636e72; margin:0 0 6px;">입력한 데이터:</p>
+        <pre id="modal-input"></pre>
+        <p style="font-size:0.88em; color:#636e72; margin:0 0 6px;">올바른 형식:</p>
+        <pre id="modal-example"></pre>
+        <button class="modal-close" onclick="document.getElementById('modal-overlay').classList.remove('show')">확인</button>
+        <div style="clear:both"></div>
+    </div>
+</div>
 
 <!-- ── 차트 카드 ── -->
 <div class="card">
@@ -181,7 +232,7 @@
 
 <!-- ── 입력 카드 ── -->
 <div class="card">
-    <h3>➕ 데이터 입력</h3>
+    <h3>➕ 데이터 입력 <span style="font-size:0.7em; font-weight:normal; color:#b2bec3;">이 웹 나가면 데이터 초기화되니까 복사 버튼 눌러서 가져가세요~</span></h3>
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchInputTab('inbody', this)">인바디 입력</button>
@@ -194,9 +245,9 @@
             <input type="number" id="ib-weight" step="0.1" placeholder="체중 (kg)">
             <input type="number" id="ib-fat" step="0.1" placeholder="체지방 (kg)">
             <input type="number" id="ib-muscle" step="0.1" placeholder="골격근량 (kg)">
-            <button class="add-btn" onclick="addInbody()">기록 추가</button>
-            <button class="add-btn" onclick="copyData()" style="background:#636e72" title="클립보드에 복사">📋</button>
-            <button class="add-btn" onclick="pasteData()" style="background:#636e72" title="클립보드에서 붙여넣기">📥</button>
+            <button class="add-btn icon-btn" onclick="addInbody()" style="background:#00b894;">➕</button>
+            <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
+            <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
         </div>
     </div>
 
@@ -211,9 +262,9 @@
                 <option value="12.5">12.5mg</option>
                 <option value="15.0">15.0mg</option>
             </select>
-            <button class="add-btn fat-btn" onclick="addDose()">투약 추가</button>
-            <button class="add-btn" onclick="copyData()" style="background:#636e72" title="클립보드에 복사">📋</button>
-            <button class="add-btn" onclick="pasteData()" style="background:#636e72" title="클립보드에서 붙여넣기">📥</button>
+            <button class="add-btn icon-btn" onclick="addDose()" style="background:#00b894;">➕</button>
+            <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
+            <button class="add-btn icon-btn" onclick="pasteData()" style="background:#636e72" title="클립보드 정보 입력하기">📥</button>
         </div>
     </div>
 
@@ -248,6 +299,29 @@
         localStorage.setItem('dietData', JSON.stringify({ inbody: inbodyData, dose: doseData }));
     }
 
+    // ── 토스트 ──
+    let toastTimer;
+    function toast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    // ── 형식 오류 모달 ──
+    const EXAMPLE = JSON.stringify({
+        inbody: [{ date: '2026-04-06', weight: 59.5, fat: 18.6, muscle: 22.6 }],
+        dose:   [{ date: '2026-04-06', dose: 5.0 }]
+    }, null, 2);
+
+    function showFormatError(input) {
+        document.getElementById('modal-input').textContent =
+            typeof input === 'string' ? input.slice(0, 300) + (input.length > 300 ? '\n...' : '') : String(input);
+        document.getElementById('modal-example').textContent = EXAMPLE;
+        document.getElementById('modal-overlay').classList.add('show');
+    }
+
     const loaded = loadFromStorage();
     let inbodyData = loaded.inbody.map(r => ({ ...r }));
     let doseData   = loaded.dose.map(r => ({ ...r }));
@@ -279,7 +353,7 @@
         const weight = parseFloat(document.getElementById('ib-weight').value);
         const fat    = parseFloat(document.getElementById('ib-fat').value);
         const muscle = parseFloat(document.getElementById('ib-muscle').value);
-        if (!date || isNaN(weight)) return alert('날짜와 체중은 필수입니다!');
+        if (!date || isNaN(weight)) return toast('📅 날짜와 체중은 필수입니다!');
         const existing = inbodyData.find(r => r.date === date);
         if (existing) {
             existing.weight = weight;
@@ -295,7 +369,7 @@
     function addDose() {
         const date = document.getElementById('dose-date').value;
         const dose = parseFloat(document.getElementById('dose-val').value);
-        if (!date) return alert('날짜를 입력하세요!');
+        if (!date) return toast('📅 날짜를 입력하세요!');
         const existing = doseData.find(r => r.date === date);
         if (existing) existing.dose = dose;
         else {
@@ -307,14 +381,14 @@
 
     function copyData() {
         const json = JSON.stringify({ inbody: inbodyData, dose: doseData }, null, 2);
-        navigator.clipboard.writeText(json).then(() => alert('📋 복사 완료!'));
+        navigator.clipboard.writeText(json).then(() => toast('📋 복사 완료!'));
     }
 
     async function pasteData() {
         try {
             const text = await navigator.clipboard.readText();
             const parsed = JSON.parse(text);
-            if (!parsed.inbody && !parsed.dose) return alert('올바른 형식이 아닙니다.');
+            if (!parsed.inbody && !parsed.dose) return showFormatError(text);
             // 날짜 기준 머지 (기존 데이터 유지, 새 데이터 추가)
             (parsed.inbody || []).forEach(r => {
                 const idx = inbodyData.findIndex(e => e.date === r.date);
@@ -328,7 +402,8 @@
             doseData.sort((a, b) => a.date.localeCompare(b.date));
             updateAll();
         } catch {
-            alert('붙여넣기 실패. 클립보드 데이터를 확인하세요.');
+            const text = await navigator.clipboard.readText().catch(() => '(읽기 실패)');
+            showFormatError(text);
         }
     }
 
@@ -355,19 +430,23 @@
         const tbody = document.getElementById('data-list');
         tbody.innerHTML = '';
         dates.forEach(date => {
-            const ib   = inbodyData.find(r => r.date === date);
-            const dose = getActiveDose(date);
-            const doseChanged = doseData.some(r => r.date === date);
-            const color = dose >= 5 ? '#9966FF' : dose ? '#4BC0C0' : '#b2bec3';
+            const ib         = inbodyData.find(r => r.date === date);
+            const isDoseDay  = doseData.some(r => r.date === date);
+            const doseRecord = doseData.find(r => r.date === date);
+            const dose       = doseRecord?.dose;
+            const color      = dose >= 5 ? '#9966FF' : dose ? '#4BC0C0' : '#b2bec3';
+            // 투약일 전용이면 투약만, 인바디일 전용이면 인바디만, 둘 다면 둘 다
+            const showDose   = isDoseDay;
+            const showInbody = !!ib;
             tbody.innerHTML += `
                 <tr>
                     <td>${date}</td>
-                    <td>${dose != null
-                        ? `<span class="dose-badge" style="background:${color}">${dose}mg${doseChanged ? ' ★' : ''}</span>`
-                        : '-'}</td>
-                    <td style="font-weight:bold">${ib ? ib.weight + 'kg' : '-'}</td>
-                    <td style="color:var(--fat)">${ib?.fat != null ? ib.fat + 'kg' : '-'}</td>
-                    <td style="color:var(--muscle)">${ib?.muscle != null ? ib.muscle + 'kg' : '-'}</td>
+                    <td>${showDose
+                        ? `<span class="dose-badge" style="background:${color}">${dose}mg</span>`
+                        : ''}</td>
+                    <td style="font-weight:bold">${showInbody ? ib.weight + 'kg' : ''}</td>
+                    <td style="color:var(--fat)">${showInbody && ib.fat != null ? ib.fat + 'kg' : ''}</td>
+                    <td style="color:var(--muscle)">${showInbody && ib.muscle != null ? ib.muscle + 'kg' : ''}</td>
                     <td><button class="del-btn" onclick="removeRow('${date}')">X</button></td>
                 </tr>`;
         });

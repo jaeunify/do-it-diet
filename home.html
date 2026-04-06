@@ -516,6 +516,11 @@
             options: {
                 responsive: true,
                 plugins: { legend: { display: false } },
+                doseLinesData: doseData.map((d, i) => ({
+                    x: toDay(d.date),
+                    label: d.dose + 'mg',
+                    showLabel: i === 0 || d.dose !== doseData[i - 1].dose
+                })),
                 scales: {
                     x: {
                         type: 'linear',
@@ -528,6 +533,42 @@
             }
         });
     }
+
+    // ── 투약 세로선 커스텀 플러그인 ──
+    const doseLinesPlugin = {
+        id: 'doseLines',
+        afterDraw(chart) {
+            const lines = chart.config.options.doseLinesData;
+            if (!lines || !lines.length) return;
+            const { ctx, chartArea, scales } = chart;
+            ctx.save();
+            lines.forEach(({ x, label, showLabel }) => {
+                const px = scales.x.getPixelForValue(x);
+                if (px < chartArea.left || px > chartArea.right) return;
+                // 세로선
+                ctx.beginPath();
+                ctx.setLineDash([5, 4]);
+                ctx.strokeStyle = 'rgba(253, 121, 168, 0.7)';
+                ctx.lineWidth = 1.5;
+                ctx.moveTo(px, chartArea.top);
+                ctx.lineTo(px, chartArea.bottom);
+                ctx.stroke();
+                // 용량 레이블 — 첫날(dose 변경 시)만 표시
+                if (showLabel) {
+                    ctx.setLineDash([]);
+                    ctx.font = 'bold 10px sans-serif';
+                    const tw = ctx.measureText(label).width;
+                    ctx.fillStyle = 'rgba(253, 121, 168, 0.15)';
+                    ctx.fillRect(px - tw / 2 - 4, chartArea.top + 4, tw + 8, 16);
+                    ctx.fillStyle = '#d63031';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(label, px, chartArea.top + 15);
+                }
+            });
+            ctx.restore();
+        }
+    };
+    Chart.register(doseLinesPlugin);
 
     function updateAll() {
         renderTable();

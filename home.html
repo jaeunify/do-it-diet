@@ -350,7 +350,10 @@
         if (field === 'weight' && pred < vals[vals.length - 1].v - 2.5 * predictDays / 7)
             pred = vals[vals.length - 1].v - 2.5 * predictDays / 7;
 
-        return { pred: parseFloat(pred.toFixed(1)), degree };
+        // 임의의 raw t(경과일)를 정규화해서 다항식 평가
+        const evalAt = rawT => evalPoly(coeffs, (rawT - tMin) / tRange);
+
+        return { pred: parseFloat(pred.toFixed(1)), degree, evalAt, lastRawT: vals[vals.length - 1].t };
     }
 
     // 최소제곱법 다항회귀
@@ -408,8 +411,23 @@
         return groups;
     }
 
+    // 구간별 선형회귀 피팅
+    function fitGroup(group, field) {
+        const vals = group.map(r => ({ t: r.t, v: r[field] })).filter(r => r.v != null);
+        if (vals.length < 2) return null;
+        const tMin = vals[0].t, tMax = vals[vals.length - 1].t;
+        const tRange = tMax - tMin || 1;
+        const coeffs = polyRegression(vals.map(r => (r.t - tMin) / tRange), vals.map(r => r.v), 1);
+        if (!coeffs) return null;
+        return {
+            evalAt: rawT => evalPoly(coeffs, (rawT - tMin) / tRange),
+            startT: vals[0].t,
+            endT:   vals[vals.length - 1].t
+        };
+    }
+
     // ── 차트 렌더 ──
-    function renderSingleChart(field, canvasId, statusId, color, label, unit, statusClass) {
+    function renderSingleChart(field, canvasId, statusId, color, label, unit) {
         const predictDays = parseInt(document.getElementById('predict-days').value) || 7;
         if (inbodyData.length === 0) return;
 
@@ -424,7 +442,6 @@
             return `${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')}`;
         };
 
-        const n = inbodyData.length;
         const points = inbodyData.map(r => ({
             x: toDay(r.date),
             y: r[field] ?? null
@@ -432,36 +449,69 @@
 
         const dose = getActiveDose(inbodyData[inbodyData.length - 1]?.date);
 
+        // 구간별 회귀선 데이터셋 생성
+        const regressionDatasets = groups.map((group, gi) => {
+            const fit = fitGroup(group, field);
+            if (!fit) return null;
+            const isLast = gi === groups.length - 1;
+            // 끊김 방지: 다음 구간의 시작 t까지 연장
+            const nextStartT = !isLast
+                ? groups[gi + 1].find(r => r[field] != null)?.t ?? fit.endT
+                : null;
+            const endT = isLast ? fit.endT + predictDays : nextStartT;
+            const steps = 60;
+            const linePoints = [];
+            for (let i = 0; i <= steps; i++) {
+                const rawT = fit.startT + (endT - fit.startT) * i / steps;
+                linePoints.push({ x: rawT, y: parseFloat(fit.evalAt(rawT).toFixed(2)) });
+            }
+            // 시작점 · 끝점에만 점 표시
+            const pointRadii = linePoints.map((_, i) => (i === 0 || i === steps) ? 5 : 0);
+            return {
+                label: `회귀선 ${gi+1}`,
+                data: linePoints,
+                borderColor: '#f9ca24',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [6, 4],
+                pointRadius: pointRadii,
+                pointBackgroundColor: '#f9ca24',
+                fill: false,
+                tension: 0,
+                order: 0
+            };
+        }).filter(Boolean);
+
         if (result) {
-            const lastDay = toDay(inbodyData[inbodyData.length - 1].date);
-            points.push({ x: lastDay + predictDays, y: result.pred });
             document.getElementById(statusId).innerHTML =
                 `현재 <b>${dose != null ? dose + 'mg' : '-'}</b> 구간 · ${predictDays}일 뒤 예상 ${label}: ` +
                 `<b style="color:${color}">${result.pred}${unit}</b>` +
-                `<br><small style="color:#888">${result.degree}차 다항회귀 (데이터 ${lastGroup.filter(r => r[field] != null).length}개)</small>`;
+                `<br><small style="color:#888">${result.degree}차 회귀 (데이터 ${lastGroup.filter(r => r[field] != null).length}개)</small>`;
         } else {
             document.getElementById(statusId).innerHTML = '현재 용량 구간 데이터 2개 이상 필요합니다.';
         }
-
-        const pointColors = points.map((_, i) => i >= n ? '#fd79a8' : color);
 
         if (charts[field]) charts[field].destroy();
         const ctx = document.getElementById(canvasId).getContext('2d');
         charts[field] = new Chart(ctx, {
             type: 'line',
             data: {
-                datasets: [{
-                    label,
-                    data: points,
-                    borderColor: color,
-                    backgroundColor: color + '18',
-                    borderWidth: 3,
-                    pointBackgroundColor: pointColors,
-                    pointRadius: 5,
-                    tension: 0.3,
-                    fill: true,
-                    spanGaps: true
-                }]
+                datasets: [
+                    {
+                        label,
+                        data: points,
+                        borderColor: color,
+                        backgroundColor: color + '18',
+                        borderWidth: 3,
+                        pointBackgroundColor: color,
+                        pointRadius: 5,
+                        tension: 0.3,
+                        fill: true,
+                        spanGaps: true,
+                        order: 1
+                    },
+                    ...regressionDatasets
+                ]
             },
             options: {
                 responsive: true,

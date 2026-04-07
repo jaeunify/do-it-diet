@@ -137,10 +137,14 @@
         .date-wrap::before {
             content: '날짜 입력';
             position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-            font-size: 0.85em; color: #aaa; pointer-events: none;
+            font-size: 0.88em; color: #aaa; pointer-events: none; z-index: 1;
         }
-        .date-wrap input[type=date]::-webkit-calendar-picker-indicator { opacity: 0.5; }
+        .date-wrap.has-value::before { display: none; }
         .date-wrap input[type=date] { width: 100%; }
+        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-text,
+        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-month-field,
+        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-day-field,
+        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-year-field { color: transparent; }
         .btn-group { display: flex; gap: 8px; flex: 0 0 auto; }
 
         /* Table */
@@ -241,7 +245,7 @@
 
 <!-- ── 입력 카드 ── -->
 <div class="card">
-    <h3>➕ 데이터 입력 <span style="font-size:0.7em; font-weight:normal; color:#b2bec3;">이 웹 나가면 데이터 초기화되니까 복사 버튼 눌러서 가져가세요~</span></h3>
+    <h3>➕ 데이터 입력 <span style="font-size:0.7em; font-weight:normal; color:#b2bec3;">이 웹 나가면 데이터 초기화되니까 복사📋 버튼 눌러서 메모장에 복사해두세요~</span></h3>
 
     <div class="tab-bar">
         <button class="tab-btn active" onclick="switchInputTab('inbody', this)">인바디 입력</button>
@@ -265,14 +269,17 @@
     <div id="input-panel-dose" class="input-panel">
         <div class="input-row">
             <div class="date-wrap"><input type="date" id="dose-date"></div>
-            <select id="dose-val">
+            <select id="dose-val" onchange="document.getElementById('dose-custom').style.display=this.value==='custom'?'block':'none'">
+                <option value="0.25">0.25mg (퀵펜)</option>
                 <option value="2.5">2.5mg</option>
                 <option value="5.0" selected>5.0mg</option>
                 <option value="7.5">7.5mg</option>
                 <option value="10.0">10.0mg</option>
                 <option value="12.5">12.5mg</option>
                 <option value="15.0">15.0mg</option>
+                <option value="custom">직접 입력...</option>
             </select>
+            <input type="number" id="dose-custom" step="0.25" placeholder="mg 입력" style="display:none; flex:1 1 80px;">
             <div class="btn-group">
                 <button class="add-btn icon-btn" onclick="addDose()" style="background:#00b894;">➕</button>
                 <button class="add-btn icon-btn" onclick="copyData()" style="background:#636e72" title="데이터 복사해서 클립보드에 저장">📋</button>
@@ -381,8 +388,12 @@
 
     function addDose() {
         const date = document.getElementById('dose-date').value;
-        const dose = parseFloat(document.getElementById('dose-val').value);
+        const sel  = document.getElementById('dose-val').value;
+        const dose = sel === 'custom'
+            ? parseFloat(document.getElementById('dose-custom').value)
+            : parseFloat(sel);
         if (!date) return toast('📅 날짜를 입력하세요!');
+        if (isNaN(dose) || dose <= 0) return toast('💉 용량을 입력하세요!');
         const existing = doseData.find(r => r.date === date);
         if (existing) existing.dose = dose;
         else {
@@ -765,7 +776,15 @@
         renderSingleChart('muscle', 'chart-muscle', 'status-muscle', '#00b894', '골격근량', 'kg');
     }
 
-    window.onload = () => updateAll(true);
+    window.onload = () => {
+        updateAll(true);
+        ['ib-date', 'dose-date'].forEach(id => {
+            const el = document.getElementById(id);
+            const update = () => el.closest('.date-wrap').classList.toggle('has-value', !!el.value);
+            el.addEventListener('change', update);
+            update();
+        });
+    };
 </script>
 
 </body>

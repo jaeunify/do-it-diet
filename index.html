@@ -133,18 +133,9 @@
         }
         .add-btn.fat-btn { background: var(--fat); }
         .add-btn.icon-btn { padding: 9px 12px; font-size: 1em; flex: 0 0 auto; min-width: unset; }
-        .date-wrap { position: relative; flex: 1 1 120px; min-width: 0; }
-        .date-wrap::before {
-            content: '날짜 입력';
-            position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-            font-size: 0.88em; color: #aaa; pointer-events: none; z-index: 1;
-        }
-        .date-wrap.has-value::before { display: none; }
-        .date-wrap input[type=date] { width: 100%; }
-        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-text,
-        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-month-field,
-        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-day-field,
-        .date-wrap input[type=date]:not(.has-value)::-webkit-datetime-edit-year-field { color: transparent; }
+        .date-wrap { display: flex; flex: 1 1 200px; min-width: 0; align-items: center; gap: 6px; background: white; border: 1px solid #dfe6e9; border-radius: 8px; padding: 0 10px; }
+        .date-wrap label { font-size: 0.82em; color: #aaa; white-space: nowrap; }
+        .date-wrap input[type=date] { border: none; padding: 9px 0; font-size: 0.88em; flex: 1; outline: none; min-width: 0; background: transparent; }
         .btn-group { display: flex; gap: 8px; flex: 0 0 auto; }
 
         /* Table */
@@ -254,7 +245,7 @@
 
     <div id="input-panel-inbody" class="input-panel active">
         <div class="input-row">
-            <div class="date-wrap"><input type="date" id="ib-date"></div>
+            <div class="date-wrap"><label>날짜</label><input type="date" id="ib-date"></div>
             <input type="number" id="ib-weight" step="0.1" placeholder="체중 (kg)">
             <input type="number" id="ib-fat" step="0.1" placeholder="체지방 (kg)">
             <input type="number" id="ib-muscle" step="0.1" placeholder="골격근량 (kg)">
@@ -268,7 +259,7 @@
 
     <div id="input-panel-dose" class="input-panel">
         <div class="input-row">
-            <div class="date-wrap"><input type="date" id="dose-date"></div>
+            <div class="date-wrap"><label>날짜</label><input type="date" id="dose-date"></div>
             <select id="dose-val" onchange="document.getElementById('dose-custom').style.display=this.value==='custom'?'block':'none'">
                 <option value="0.25">0.25mg (퀵펜)</option>
                 <option value="2.5">2.5mg</option>
@@ -802,12 +793,6 @@
 
     window.onload = () => {
         updateAll(true);
-        ['ib-date', 'dose-date'].forEach(id => {
-            const el = document.getElementById(id);
-            const update = () => el.closest('.date-wrap').classList.toggle('has-value', !!el.value);
-            el.addEventListener('change', update);
-            update();
-        });
     };
 </script>
 

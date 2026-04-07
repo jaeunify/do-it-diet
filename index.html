@@ -298,11 +298,14 @@
                     <th>체중</th>
                     <th style="color:var(--fat)">체지방</th>
                     <th style="color:var(--muscle)">골격근량</th>
-                    <th>삭제</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="data-list"></tbody>
         </table>
+    </div>
+    <div style="text-align:right; margin-top:12px;">
+        <button onclick="confirmClearAll()" style="background:none; border:1px solid #e17055; color:#e17055; border-radius:8px; padding:6px 14px; font-size:0.8em; cursor:pointer;">전체 삭제</button>
     </div>
 </div>
 
@@ -429,6 +432,27 @@
             const text = await navigator.clipboard.readText().catch(() => '(읽기 실패)');
             showFormatError(text);
         }
+    }
+
+    function confirmClearAll() {
+        document.getElementById('modal-box').innerHTML = `
+            <h4>⚠️ 전체 삭제</h4>
+            <p style="font-size:0.92em; color:#636e72;">모든 데이터가 삭제됩니다. 복구할 수 없습니다.</p>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button onclick="document.getElementById('modal-overlay').classList.remove('show')"
+                    style="padding:8px 20px; border:1px solid #ddd; background:white; border-radius:8px; cursor:pointer;">취소</button>
+                <button onclick="clearAll()"
+                    style="padding:8px 20px; background:#e17055; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">삭제</button>
+            </div>`;
+        document.getElementById('modal-overlay').classList.add('show');
+    }
+
+    function clearAll() {
+        inbodyData = [];
+        doseData = [];
+        document.getElementById('modal-overlay').classList.remove('show');
+        updateAll();
+        toast('🗑️ 전체 삭제 완료');
     }
 
     function removeRow(date) {

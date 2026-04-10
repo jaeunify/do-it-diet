@@ -402,9 +402,38 @@
         navigator.clipboard.writeText(json).then(() => toast('📋 복사 완료!'));
     }
 
-    async function pasteData() {
+    function showPasteModal() {
+        document.getElementById('modal-box').innerHTML = `
+            <h4>📥 데이터 붙여넣기</h4>
+            <p style="font-size:0.88em; color:#636e72; margin:0 0 8px;">JSON 데이터를 입력하세요:</p>
+            <textarea id="paste-input" placeholder="여기에 데이터를 붙여넣으세요..." style="width:100%; height:120px; padding:10px; border:1px solid #dfe6e9; border-radius:8px; font-family:monospace; font-size:0.8em; resize:vertical;"></textarea>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button onclick="pasteFromClipboard()"
+                    style="padding:8px 16px; border:1px solid #636e72; background:white; color:#636e72; border-radius:8px; cursor:pointer; font-weight:bold;">📋 클립보드 바로넣기</button>
+                <button onclick="document.getElementById('modal-overlay').classList.remove('show')"
+                    style="padding:8px 16px; border:1px solid #ddd; background:white; border-radius:8px; cursor:pointer;">취소</button>
+                <button onclick="pasteSaveData()"
+                    style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold;">💾 저장</button>
+            </div>`;
+        document.getElementById('modal-overlay').classList.add('show');
+        document.getElementById('paste-input').focus();
+    }
+
+    async function pasteFromClipboard() {
         try {
             const text = await navigator.clipboard.readText();
+            document.getElementById('paste-input').value = text;
+            toast('📋 클립보드에서 읽어왔습니다');
+        } catch {
+            toast('⚠️ 클립보드를 읽을 수 없습니다');
+        }
+    }
+
+    function pasteSaveData() {
+        const text = document.getElementById('paste-input').value.trim();
+        if (!text) return toast('데이터를 입력하세요');
+        
+        try {
             const parsed = JSON.parse(text);
             if (!parsed.inbody && !parsed.dose) return showFormatError(text);
             // 날짜 기준 머지 (기존 데이터 유지, 새 데이터 추가)
@@ -418,11 +447,16 @@
             });
             inbodyData.sort((a, b) => a.date.localeCompare(b.date));
             doseData.sort((a, b) => a.date.localeCompare(b.date));
+            document.getElementById('modal-overlay').classList.remove('show');
             updateAll();
+            toast('✅ 데이터가 저장되었습니다');
         } catch {
-            const text = await navigator.clipboard.readText().catch(() => '(읽기 실패)');
             showFormatError(text);
         }
+    }
+
+    function pasteData() {
+        showPasteModal();
     }
 
     function confirmClearAll() {
